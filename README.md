@@ -1,2 +1,5 @@
-# ct_calibration
-A tookit for multi cameras calibration in ROS, specially for tracking module.
+### CT_CALIBRATION
+
+---
+
+This repository is for multi cameras calibration, specially for tracking modules.

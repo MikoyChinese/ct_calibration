@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<launch>
+
+  <arg name="sensor_launchers_dir"    default="$(find ct_calibration)/launch" />
+  <arg name="camera_poses_dir"        default="$(find ct_calibration)/config" />
+
+  <!-- Launching calibration initializer -->
+  <node pkg="ct_calibration" type="listener.py" ns="$(env ROS_PC_NAME)" name="listener" output="screen" required="true">
+    <param name="sensor_launchers_dir"    value="$(arg sensor_launchers_dir)" />
+    <param name="camera_poses_dir"        value="$(arg camera_poses_dir)" />
+  </node>
+
+</launch>
