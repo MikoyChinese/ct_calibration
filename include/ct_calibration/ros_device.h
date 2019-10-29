@@ -31,8 +31,8 @@
  *          Matteo Munaro [matteo.munaro@dei.unipd.it]
  */
 
-#ifndef CT_CALIBRATION_H
-#define CT_CALIBRATION_H
+#ifndef CT_CALIBRATION_ROS_DEVICE_H
+#define CT_CALIBRATION_ROS_DEVICE_H
 
 #include <ros/ros.h>
 
@@ -43,8 +43,6 @@
 #include <sensor_msgs/CameraInfo.h>
 #include <sensor_msgs/image_encodings.h>
 #include <sensor_msgs/point_cloud2_iterator.h>
-
-#include <swissranger_camera/utility.h>
 
 #include <calibration_common/pinhole/sensor.h>
 #include <kinect/depth/sensor.h>
@@ -319,127 +317,6 @@ private:
 
 };
 
-class SwissRangerDevice : public ROSDevice
-{
-
-public:
-
-  typedef boost::shared_ptr<SwissRangerDevice> Ptr;
-  typedef boost::shared_ptr<const SwissRangerDevice> ConstPtr;
-
-  typedef ROSDevice Base;
-
-  struct Messages
-  {
-    sensor_msgs::PointCloud2::ConstPtr cloud_msg;
-    sensor_msgs::Image::ConstPtr intensity_msg;
-    sensor_msgs::CameraInfo::ConstPtr camera_info_msg;
-  };
-
-  struct Data
-  {
-    typedef boost::shared_ptr<Data> Ptr;
-    typedef boost::shared_ptr<const Data> ConstPtr;
-    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud;
-    cv::Mat intensity_image;
-    cv::Mat confidence_image;
-  };
-
-  SwissRangerDevice(const std::string & frame_id)
-    : Base(),
-      frame_id_(frame_id),
-      depth_sensor_(boost::make_shared<cb::DepthSensor>(cb::Vector3(0.02, 0.0, 0.0))),
-      confidence_threshold_(0.95f)
-  {
-    // Do nothing
-  }
-
-  virtual ~SwissRangerDevice() {}
-
-  inline const std::string & frameId() const
-  {
-    return frame_id_;
-  }
-
-  inline const Messages & lastMessages() const
-  {
-    if (hasNewMessages())
-      setHasNewMessages(false);
-    return last_messages_;
-  }
-
-  inline const Data::Ptr & convertLastMessages()
-  {
-    if (hasNewMessages())
-    {
-      setHasNewMessages(false);
-      last_data_ = convertMessages(last_messages_);
-    }
-    return lastData();
-  }
-
-  inline const Data::Ptr & lastData() const
-  {
-    return last_data_;
-  }
-
-  inline void setConfidenceThreshold(float threshold)
-  {
-    confidence_threshold_ = threshold;
-  }
-
-  inline const cb::PinholeSensor::Ptr & intensitySensor() const
-  {
-    return intensity_sensor_;
-  }
-
-  inline const cb::DepthSensor::Ptr & depthSensor() const
-  {
-    return depth_sensor_;
-  }
-
-  inline bool isDepthSensorSet() const
-  {
-    return depth_sensor_.get() != 0;
-  }
-
-  inline bool isIntensitySensorSet() const
-  {
-    return intensity_sensor_.get() != 0;
-  }
-
-  virtual bool allSensorsSet() const
-  {
-    return isIntensitySensorSet() and isDepthSensorSet();
-  }
-
-  void cloudCallback(const sensor_msgs::PointCloud2::ConstPtr & cloud_msg);
-
-  void imageCallback(const sensor_msgs::Image::ConstPtr & image_msg,
-                     const sensor_msgs::CameraInfo::ConstPtr & camera_info_msg);
-
-  virtual void createSubscribers(ros::NodeHandle & nh,
-                                 image_transport::ImageTransport & image_transport_nh,
-                                 const std::string & main_topic);
-
-  Data::Ptr convertMessages(const Messages & messages);
-
-private:
-
-  std::string frame_id_;
-
-  cb::PinholeSensor::Ptr intensity_sensor_ ;
-  cb::DepthSensor::Ptr depth_sensor_;
-
-  ros::Subscriber cloud_sub_;
-  image_transport::CameraSubscriber camera_sub_;
-  Messages last_messages_;
-  Data::Ptr last_data_;
-  float confidence_threshold_;
-
-};
-
-
 } /* namespace ct_calibration */
 
-#endif /* CT_CALIBRATION_H */
+#endif /* CT_CALIBRATION_ROS_DEVICE_H */

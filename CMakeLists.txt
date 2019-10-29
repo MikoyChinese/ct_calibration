@@ -6,11 +6,15 @@ set(CMAKE_BUILD_TYPE Release)#RelWithDebInfo)
 ## Find catkin macros and libraries
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
 ## is used, also find other catkin packages
-find_package(catkin REQUIRED COMPONENTS cmake_modules roscpp calibration_common kinect camera_info_manager
-                                        cv_bridge image_transport tf_conversions swissranger_camera pcl_ros)
+find_package(catkin REQUIRED COMPONENTS cmake_modules roscpp calibration_common kinect camera_info_manager cv_bridge image_transport tf_conversions pcl_ros message_generation geometry_msgs sensor_msgs)
 
-# Msg
-find_package(message_generation geometry_msgs sensor_msgs)
+
+add_message_files(FILES
+  CalibrationStatus.msg
+  )
+
+add_service_files(FILES CTSensor.srv CTTransform.srv)
+generate_messages(DEPENDENCIES std_msgs geometry_msgs sensor_msgs)
 
 ## System dependencies are found with CMake's conventions
 # find_package(Boost REQUIRED COMPONENTS system)
@@ -36,7 +40,7 @@ endif()
 catkin_package(
   INCLUDE_DIRS include
 #  LIBRARIES
-  CATKIN_DEPENDS roscpp calibration_common camera_info_manager cv_bridge image_transport swissranger_camera
+  CATKIN_DEPENDS roscpp calibration_common camera_info_manager cv_bridge image_transport
 #  DEPENDS eigen pcl opencv2
 )
 
@@ -50,13 +54,6 @@ include_directories(include
   ${PCL_INCLUDE_DIRS}
   ${EIGEN_INCLUDE_DIRS}
 )
-
-add_message_files(FILES
-  CalibrationStatus.msg
-  )
-
-add_service_files(FILES CTSensor.srv CTTransform.srv)
-generate_messages(DEPENDENCIES std_msgs geometry_msgs sensor_msgs)
 
 catkin_package(
    INCLUDE_DIRS

@@ -37,7 +37,7 @@
 #include <tf/transform_datatypes.h>
 #include <tf/tf.h>
 #include <ct_calibration/ct_calibration.h>
-##include <ceres/ceres.h>
+#include <ceres/ceres.h>
 
 #define OPTIMIZATION_COUNT 25
 
@@ -57,7 +57,7 @@ CTCalibration::CTCalibration(const ros::NodeHandle & node_handle)
     floor_acquisition_(false),
     floor_estimated_(false)
 {
-    marker_pub_ = node_handle_.advertise<visualization_msgs::Marker>("markers" 0);
+    marker_pub_ = node_handle_.advertise<visualization_msgs::Marker>("markers", 0);
 }
 
 void CTCalibration::addSensor(const cb::PinholeSensor::Ptr & sensor,
@@ -94,9 +94,9 @@ bool CTCalibration::analyzeData(const cb::PinholeSensor::Ptr & color_sensor,
     ex.setColorSensor(color_sensor);
     ex.setDepthSensor(depth_sensor);
     ex.setDepthTransform(depth_sensor->pose());
-    ex.setCheckerboard(checkerboard_)
+    ex.setCheckerboard(checkerboard_);
 
-    cb::PinholeView<cb::PlanarObject>::Ptr color_view;
+    cb::PinholeView<cb::Checkerboard>::Ptr color_view;
     cb::DepthViewPCL<cb::PlanarObject>::Ptr depth_view;
     cb::Checkerboard::Ptr extracted_checkerboard;
     cb::PlanarObject::Ptr extracted_plane;
@@ -105,8 +105,8 @@ bool CTCalibration::analyzeData(const cb::PinholeSensor::Ptr & color_sensor,
         visualization_msgs::Marker checkerboard_marker;
         checkerboard_marker.ns = "checkerboard";
         checkerboard_marker.id = node_map_[color_sensor]->id();
-        extracted_checkerboard->toMarker(plane_marker);
-        marker_pub_.publish(plane_marker);
+        extracted_checkerboard->toMarker(checkerboard_marker);
+        marker_pub_.publish(checkerboard_marker);
 
         visualization_msgs::Marker plane_marker;
         plane_marker.ns = "plane";
@@ -157,7 +157,7 @@ bool CTCalibration::analyzeData(const cb::PinholeSensor::Ptr & color_sensor,
         tf_pub_.sendTransform(transform_msg);
 
         color_cb_view = boost::make_shared<CheckerboardView>(color_view,
-            extracted_checkerboard, extracted_checkerboard->center());
+            extracted_checkerboard, extracted_checkerboard->center(), floorAcquisition());
 
         return true;
     }
@@ -179,7 +179,7 @@ void CTCalibration::perform()
 
             if (it == view_map.end())
             {
-                view_map_vec_.resize(view_map_vec_.size - 1);
+                view_map_vec_.resize(view_map_vec_.size() - 1);
                 return;
             }
 
@@ -422,7 +422,7 @@ public:
         cb_corners.container() = checkerboard_pose_eigen * checkerboard_->corners().container().cast<T>();
         typename cb::Types<T>::Cloud2 reprojected_corners = camera_model_->project3dToPixel<T>(cb_corners);
 
-        for(cv::Size1 i = 0; i < cb_corners.elements(); ++i)
+        for(cb::Size1 i = 0; i < cb_corners.elements(); ++i)
             residuals[i] = T((reprojected_corners[i] - image_corners_[i].cast<T>()).norm() / 0.5);
         return true;
     }
@@ -432,6 +432,57 @@ private:
     const cb::PinholeCameraModel::ConstPtr camera_model_;
     const cb::Checkerboard::ConstPtr checkerboard_;
     const cb::Cloud2 image_corners_;
+};
+
+class RootPinholeFloorError
+{
+public:
+
+  RootPinholeFloorError(const cb::PinholeCameraModel::ConstPtr & camera_model,
+                        const cb::Checkerboard::ConstPtr & checkerboard,
+                        const cb::Cloud2 & image_corners)
+    : camera_model_(camera_model),
+      checkerboard_(checkerboard),
+      image_corners_(image_corners)
+  {
+  }
+
+  template <typename T>
+    bool operator ()(const T * const checkerboard_pose,
+                     const T * const plane_origin,
+                     T * residuals) const
+    {
+      typename cb::Types<T>::Translation2 checkerboard_t(checkerboard_pose[0], checkerboard_pose[1]);
+      typename cb::Types<T>::Rotation2 checkerboard_r(checkerboard_pose[2]);
+      typename cb::Types<T>::Transform2 checkerboard_pose_eigen = checkerboard_t * checkerboard_r;
+
+      typename cb::Types<T>::Vector3 plane_origin_eigen(plane_origin[0], plane_origin[1], plane_origin[2]);
+      typename cb::Types<T>::Plane plane(-plane_origin_eigen.normalized(), plane_origin_eigen.norm());
+
+      typename cb::Types<T>::Transform plane_pose;
+      plane_pose.linear().col(2) = plane.normal();
+      plane_pose.linear().col(0) = (plane.projection(plane_origin_eigen + cb::Types<T>::Vector3::UnitX()) - plane_origin_eigen).normalized();
+      plane_pose.linear().col(1) = plane_pose.linear().col(2).cross(plane_pose.linear().col(0));
+      plane_pose.translation() = plane_origin_eigen;
+
+      typename cb::Types<T>::Cloud3 cb_corners(cb::Size2(checkerboard_->cols(), checkerboard_->rows()), cb::Types<T>::Point3::Zero());
+      cb_corners.container().template topRows<2>() = checkerboard_pose_eigen * checkerboard_->corners().container().template topRows<2>().cast<T>();
+      cb_corners.container() = plane_pose * cb_corners.container();
+
+      typename cb::Types<T>::Cloud2 reprojected_corners = camera_model_->project3dToPixel<T>(cb_corners);
+
+      for (cb::Size1 i = 0; i < cb_corners.elements(); ++i)
+        residuals[i] = T((reprojected_corners[i] - image_corners_[i].cast<T>()).norm() / 0.5);
+
+      return true;
+    }
+
+private:
+
+  const cb::PinholeCameraModel::ConstPtr camera_model_;
+  const cb::Checkerboard::ConstPtr checkerboard_;
+  const cb::Cloud2 image_corners_;
+
 };
 
 class PinholeError
@@ -586,7 +637,7 @@ public:
 
             typename cb::Types<T>::Plane depth_plane(depth_plane_.normal().cast<T>(), T(depth_plane_.offset()));
             cb::Polynomial<T, 2> depth_error_function(depth_error_function_.coefficients().cast<T>());
-            for(cb::Size1 i=0; i<cb_corners.elements(); ++)
+            for(cb::Size1 i=0; i<cb_corners.elements(); ++i)
             {
                 typename cb::Types<T>::Line line(cb::Types<T>::Point3::Zero(), cb_corners[i]);
                 residuals[i] = T((line.intersectionPoint(depth_plane) - cb_corners[i]).norm()
@@ -638,7 +689,7 @@ void CTCalibration::optimize()
 
     cb::Vector3 floor_origin;
     cb::Vector3 floor_x;
-    cb:Transform floor_pose;
+    cb::Transform floor_pose;
     if(floor_estimated_)
     {
         floor_origin = -floor_.normal() * floor_.offset();

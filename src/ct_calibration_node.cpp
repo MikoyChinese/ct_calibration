@@ -46,7 +46,7 @@
 
 #include <calibration_common/pcl/utils.h>
 
-#include <ct_calibration/opt_calibration_node.h>
+#include <ct_calibration/ct_calibration_node.h>
 #include <ct_calibration/CalibrationStatus.h>
 
 namespace ct_calibration
@@ -169,21 +169,9 @@ CTCalibrationNode::CTCalibrationNode(const ros::NodeHandle & node_handle)
            fixed_sensor_ = device->colorSensor();
       }
     }
-    else if (type_s == "sr4500")
-    {
-      SwissRangerDevice::Ptr device = boost::make_shared<SwissRangerDevice>(frame_id);
-      swiss_ranger_vec_.push_back(device);
-      ros_device = device;
-      if (world_computation_ == UPDATE)
-      {
-        ROS_INFO_STREAM(frame_id << " == " << fixed_sensor_frame_id << "?");
-        if (frame_id == fixed_sensor_frame_id)
-           fixed_sensor_ = device->depthSensor();
-      }
-    }
     else
     {
-      ROS_FATAL_STREAM("\"" << ss.str() << "\" parameter value not valid. Please use \"pinhole_rgb\", \"kinect\" or \"swiss_ranger\".");
+      ROS_FATAL_STREAM("\"" << ss.str() << "\" parameter value not valid. Please use \"pinhole_rgb\", \"kinect\" or \".");
     }
 
     ss.str("");
@@ -208,8 +196,6 @@ bool CTCalibrationNode::initialize()
       all_messages_received = pinhole_vec_[i]->hasNewMessages();
     for (size_t i = 0; all_messages_received and i < kinect_vec_.size(); ++i)
       all_messages_received = kinect_vec_[i]->hasNewMessages();
-    for (size_t i = 0; all_messages_received and i < swiss_ranger_vec_.size(); ++i)
-      all_messages_received = swiss_ranger_vec_[i]->hasNewMessages();
 
     if (not all_messages_received)
       ROS_WARN_THROTTLE(5, "Not all messages received. Waiting...");
@@ -243,16 +229,6 @@ bool CTCalibrationNode::initialize()
     status_msg_.sensor_ids.push_back(device->depthFrameId());
   }
 
-  for (size_t i = 0; i < swiss_ranger_vec_.size(); ++i) // TODO Add flags
-  {
-    const SwissRangerDevice::Ptr & device = swiss_ranger_vec_[i];
-    calibration_->addSensor(device->intensitySensor(), true);
-    calibration_->addSensor(device->depthSensor(), true);
-    sensor_vec_.push_back(device->intensitySensor());
-    sensor_vec_.push_back(device->depthSensor());
-    images_acquired_map_[device->frameId()] = 0;
-    status_msg_.sensor_ids.push_back(device->frameId());
-  }
 
   status_msg_.images_acquired.resize(status_msg_.sensor_ids.size(), 0);
   status_msg_.header.stamp = ros::Time::now();
@@ -347,29 +323,6 @@ void CTCalibrationNode::spin()
             calibration_->addData(device->depthSensor(), depth_cb_view);
             images_acquired_map_[device->colorFrameId()]++;
             ROS_INFO_STREAM("[" << device->colorFrameId() << "] checkerboard detected");
-            ++count;
-          }
-        }
-      }
-      for (size_t i = 0; i < swiss_ranger_vec_.size(); ++i)
-      {
-        const SwissRangerDevice::Ptr & device = swiss_ranger_vec_[i];
-        if (device->hasNewMessages())
-        {
-          device->convertLastMessages();
-          SwissRangerDevice::Data::Ptr data = device->lastData();
-          CTCalibration::CheckerboardView::Ptr color_cb_view;
-          CTCalibration::CheckerboardView::Ptr depth_cb_view;
-          ROS_DEBUG_STREAM("[" << device->frameId() << "] analysing image generated at: " << device->lastMessages().intensity_msg->header.stamp);
-          ROS_DEBUG_STREAM("[" << device->frameId() << "] analysing cloud generated at: " << device->lastMessages().cloud_msg->header.stamp);
-          if (calibration_->analyzeData(device->intensitySensor(), device->depthSensor(),
-                                        data->intensity_image, data->cloud,
-                                        color_cb_view, depth_cb_view))
-          {
-            calibration_->addData(device->intensitySensor(), color_cb_view);
-            calibration_->addData(device->depthSensor(), depth_cb_view);
-            images_acquired_map_[device->frameId()]++;
-            ROS_INFO_STREAM("[" << device->frameId() << "] checkerboard detected");
             ++count;
           }
         }

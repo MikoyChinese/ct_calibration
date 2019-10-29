@@ -31,8 +31,8 @@
  *          Matteo Munaro [matteo.munaro@dei.unipd.it]
  */
 
-#ifndef CT_CALIBRATION_H
-#define CT_CALIBRATION_H
+#ifndef CT_CALIBRATION_CHECKBOARD_H
+#define CT_CALIBRATION_CHECKBOARD_H
 
 #include <ct_calibration/ros_device.h>
 #include <Eigen/Eigen>
@@ -126,4 +126,4 @@ private:
 
 } /* namespace ct_calibration */
 
-#endif /* CT_CALIBRATION_H */
+#endif /* CT_CALIBRATION_CHECKBOARD_H */

@@ -31,8 +31,8 @@
  *          Matteo Munaro [matteo.munaro@dei.unipd.it]
  */
 
-#ifndef CT_CALIBRATION_H
-#define CT_CALIBRATION_H
+#ifndef CT_CALIBRATION_NODE_H
+#define CT_CALIBRATION_NODE_H
 
 #include <ros/ros.h>
 #include <ros/package.h>
@@ -42,12 +42,12 @@
 #include <sensor_msgs/image_encodings.h>
 
 #include <std_msgs/String.h>
-#include <opt_calibration/CalibrationStatus.h>
+#include <ct_calibration/CalibrationStatus.h>
 
 #include <calibration_common/calibration_common.h>
 #include <camera_info_manager/camera_info_manager.h>
 
-#include <ct_calibration/opt_calibration.h>
+#include <ct_calibration/ct_calibration.h>
 #include <ct_calibration/ros_device.h>
 
 using namespace camera_info_manager;
@@ -114,7 +114,6 @@ private:
 
   std::vector<PinholeRGBDevice::Ptr> pinhole_vec_;
   std::vector<KinectDevice::Ptr> kinect_vec_;
-  std::vector<SwissRangerDevice::Ptr> swiss_ranger_vec_;
 
   std::vector<Sensor::Ptr> sensor_vec_;
 
@@ -126,4 +125,4 @@ private:
 
 } /* namespace ct_calibration */
 
-#endif /* CT_CALIBRATION_H */
+#endif /* CT_CALIBRATION_NODE_H */
