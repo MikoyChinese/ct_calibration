@@ -29,10 +29,11 @@
  *  Author: Filippo Basso [bassofil@dei.unipd.it]
  *          Riccardo Levorato [levorato@dei.unipd.it]
  *          Matteo Munaro [matteo.munaro@dei.unipd.it]
+ *          Mikoy Chinese [mikoychinese@gmail.com]
  */
 
-#ifndef CT_CALIBRATION_NODE_H
-#define CT_CALIBRATION_NODE_H
+#ifndef CT_CHECKERBOARD_NODE_H
+#define CT_CHECKERBOARD_NODE_H
 
 #include <ros/ros.h>
 #include <ros/package.h>
@@ -57,14 +58,14 @@ using namespace calibration;
 namespace ct_calibration
 {
 
-class CTCalibrationNode
+class CTCheckerboardNode
 {
 public:
 
   /**
    * @brief Constructor.
    */
-  CTCalibrationNode(const ros::NodeHandle & node_handle);
+  CTCheckerboardNode(const ros::NodeHandle & node_handle);
 
   /**
    * @brief Callback for string messages which enables saving options.
@@ -91,13 +92,6 @@ public:
 
 private:
 
-  enum WorldComputation
-  {
-    FIRST_SENSOR,
-    LAST_CHECKERBOARD,
-    UPDATE
-  };
-
   ros::NodeHandle node_handle_;                             ///< @brief Handle to the ROS node.
   image_transport::ImageTransport image_transport_;         ///< @brief Handle to ImageTransport, which advertise and subscribe to image topics.
 
@@ -108,12 +102,10 @@ private:
   std::map<std::string, int> images_acquired_map_;
   ct_calibration::CalibrationStatus status_msg_;
 
-  WorldComputation world_computation_;
   Sensor::Ptr fixed_sensor_;
   Pose fixed_sensor_pose_;
 
   std::vector<PinholeRGBDevice::Ptr> pinhole_vec_;
-  std::vector<KinectDevice::Ptr> kinect_vec_;
 
   std::vector<Sensor::Ptr> sensor_vec_;
 
@@ -125,4 +117,4 @@ private:
 
 } /* namespace ct_calibration */
 
-#endif /* CT_CALIBRATION_NODE_H */
+#endif /* CT_CHECKERBOARD_NODE_H */

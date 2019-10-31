@@ -46,19 +46,19 @@
 
 #include <calibration_common/pcl/utils.h>
 
-#include <ct_calibration/ct_calibration_node.h>
+#include <ct_calibration/ct_checkerboard_node.h>
 #include <ct_calibration/CalibrationStatus.h>
 
 namespace ct_calibration
 {
 
-CTCalibrationNode::CTCalibrationNode(const ros::NodeHandle & node_handle)
+CTCheckerboardNode::CTCheckerboardNode(const ros::NodeHandle & node_handle)
   : node_handle_(node_handle),
     image_transport_(node_handle),
     world_computation_(FIRST_SENSOR),
     fixed_sensor_pose_(Pose::Identity())
 {
-  action_sub_ = node_handle_.subscribe("action", 1, &CTCalibrationNode::actionCallback, this);
+  action_sub_ = node_handle_.subscribe("action", 1, &CTCheckerboardNode::actionCallback, this);
   status_pub_ = node_handle_.advertise<ct_calibration::CalibrationStatus>("status", 1);
 
   std::string world_computation_s;
@@ -124,16 +124,6 @@ CTCalibrationNode::CTCalibrationNode(const ros::NodeHandle & node_handle)
     if (not node_handle_.getParam(ss.str(), type_s))
       ROS_FATAL_STREAM("No \"" << ss.str() << "\" parameter found!!");
 
-//    SensorNode::SensorType type;
-//    if (type_s == "pinhole_rgb")
-//      type = SensorNode::PINHOLE_RGB;
-//    else if (type_s == "kinect_depth")
-//      type = SensorNode::KINECT_DEPTH;
-//    else if (type_s == "tof_depth")
-//      type = SensorNode::TOF_DEPTH;
-//    else
-//      ROS_FATAL_STREAM("\"" << ss.str() << "\" parameter value not valid. Please use \"pinhole_rgb\", \"kinect_depth\" or \"tof_depth\".");
-
     ss.str("");
     ss << "/sensor_" << i;
     std::string frame_id = ss.str();
@@ -184,7 +174,7 @@ CTCalibrationNode::CTCalibrationNode(const ros::NodeHandle & node_handle)
     ROS_FATAL_STREAM("Wrong \"fixed_sensor/name\" parameter provided: " << fixed_sensor_frame_id);
 }
 
-bool CTCalibrationNode::initialize()
+bool CTCheckerboardNode::initialize()
 {
   bool all_messages_received = false;
   ros::Rate rate(1.0);
@@ -238,7 +228,7 @@ bool CTCalibrationNode::initialize()
   return true;
 }
 
-void CTCalibrationNode::actionCallback(const std_msgs::String::ConstPtr & msg)
+void CTCheckerboardNode::actionCallback(const std_msgs::String::ConstPtr & msg)
 {
   if (msg->data == "save" or msg->data == "saveExtrinsicCalibration")
   {
@@ -271,7 +261,7 @@ void CTCalibrationNode::actionCallback(const std_msgs::String::ConstPtr & msg)
   }
 }
 
-void CTCalibrationNode::spin()
+void CTCheckerboardNode::spin()
 {
   ros::Rate rate(5.0);
 
@@ -357,7 +347,7 @@ void CTCalibrationNode::spin()
   }
 }
 
-bool CTCalibrationNode::save()
+bool CTCheckerboardNode::save()
 {
   // Save tfs between sensors and world coordinate system (last checherboard) to file
   std::string file_name = ros::package::getPath("ct_calibration") + "/conf/camera_poses.yaml";
@@ -462,7 +452,7 @@ int main(int argc, char ** argv)
 
     try
     {
-        ct_calibration::CTCalibrationNode calib_node(node_handle);
+        ct_calibration::CTCheckerboardNode calib_node(node_handle);
         if(not calib_node.initialize())
             return 1;
         calib_node.spin();

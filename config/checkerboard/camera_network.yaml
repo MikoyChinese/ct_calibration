@@ -1,0 +1,38 @@
+# Camera network parameters
+# sensor type: [realsense, kinect2]
+network:
+  - pc: "Master"
+    sensors:
+      - type: realsense
+        id: "rs01"
+        serial: '834412071954'
+      - type: realsense
+        id: "rs02"
+        serial: '843112071836'
+
+  - pc: "Node_101"
+    sensors:
+      - type: realsense
+        id: "rs04"
+        serial: '834412071837'
+
+# Checkerboard parameters. units-> meter
+checkerboard:
+  rows: 6
+  cols: 5
+  cell_width: 0.07
+  cell_height: 0.07
+# standalone_tags:
+#   [
+#     {id: ID, size: SIZE, name: NAME},
+#     ...
+#   ]
+aprilTag:
+  - standalone_tags:
+      [
+        {id: 0, size: 0.072},
+        {id: 1, size: 0.072}
+      ]
+  - tag_bundles:
+      [
+      ]
