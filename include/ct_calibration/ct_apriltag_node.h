@@ -34,7 +34,12 @@
 #include <sensor_msgs/image_encodings.h>
 #include <std_msgs/String.h>
 
+#include <ct_calibration/CalibrationStatus.h>
+#include <ct_calibration/ros_device.h>
+
 #include <apriltag.h>
+
+using namespace calibration;
 
 namespace ct_calibration
 {
@@ -58,6 +63,12 @@ public:
     CTApriltagNode(const ros::NodeHandle & node_handle);
 
     /**
+     * @brief Callback for string messages which enables saving options.
+     * @param[in] msg Message containing the command as a string.
+     */
+     void actionCallback(const std_msgs::String::ConstPtr & msg);
+
+    /**
      *  @brief Apriltag initialization.
      */
     bool initialize();
@@ -67,6 +78,15 @@ private:
     ros::NodeHandle node_handle_;
     image_transport::ImageTransport image_transport_;
 
+    ros::Subscriber action_sub_;
+    ros::Publisher status_sub_;
+    std::map<std::string, int> images_acquired_map_;
+    ct_calibration::CalibrationStatus status_msg_;
+
+    std::vector<PinholeRGBDevice::Ptr> pinhole_vec_;
+    std::vector<Sensor::Ptr> sensor_vec_;
+    int num_sensors_;    // @brief Number of sensors.
+
     // AprilTag 2 code's attributes.
     std::string tag_family_;
     int tag_threads_;
@@ -75,77 +95,19 @@ private:
     int tag_refine_edges_;
     int tag_debug_;
 
+    int tag_cols_;
+    int tag_rows_;
+    double tag_size_;
+    double tag_space_;
+
     // AprilTag 2 objects
     apriltag_family_t *tf_;
     apriltag_detector_t *td_;
     zarray_t *detections_;
-}
 
-class StandaloneTagDescription
-{
- public:
-  StandaloneTagDescription() {};
-  StandaloneTagDescription(int id, double size,
-                           std::string &frame_name) :
-      id_(id),
-      size_(size),
-      frame_name_(frame_name) {}
+    void getTagParams(const ros::NodeHandle & node_handle);
+} /* class CTApriltagNode */
 
-  double size() { return size_; }
-  int id() { return id_; }
-  std::string& frame_name() { return frame_name_; }
-
- private:
-  // Tag description
-  int id_;
-  double size_;
-  std::string frame_name_;
-};
-
-class TagBundleDescription
-{
- public:
-  std::map<int, int > id2idx_; // (id2idx_[<tag ID>]=<index in tags_>) mapping
-
-  TagBundleDescription(std::string name) :
-      name_(name) {}
-
-  void addMemberTag(int id, double size, cv::Matx44d T_oi) {
-    TagBundleMember member;
-    member.id = id;
-    member.size = size;
-    member.T_oi = T_oi;
-    tags_.push_back(member);
-    id2idx_[id] = tags_.size()-1;
-  }
-
-  std::string name () const { return name_; }
-  // Get IDs of bundle member tags
-  std::vector<int> bundleIds () {
-    std::vector<int> ids;
-    for (unsigned int i = 0; i < tags_.size(); i++) {
-      ids.push_back(tags_[i].id);
-    }
-    return ids;
-  }
-  // Get sizes of bundle member tags
-  std::vector<double> bundleSizes () {
-    std::vector<double> sizes;
-    for (unsigned int i = 0; i < tags_.size(); i++) {
-      sizes.push_back(tags_[i].size);
-    }
-    return sizes;
-  }
-  int memberID (int tagID) { return tags_[id2idx_[tagID]].id; }
-  double memberSize (int tagID) { return tags_[id2idx_[tagID]].size; }
-  cv::Matx44d memberT_oi (int tagID) { return tags_[id2idx_[tagID]].T_oi; }
-
- private:
-  // Bundle description
-  std::string name_;
-  std::vector<TagBundleMember > tags_;
-};
-
-}
+} /* namespace ct_calibration */
 
 #endif /* CT_APRILTAG_NODE_H */
