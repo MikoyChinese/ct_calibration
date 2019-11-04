@@ -73,6 +73,16 @@ public:
      */
     bool initialize();
 
+    /**
+     * @brief Calibration main loop.
+     */
+    void spin();
+
+    /**
+     * @brief Save calibration results.
+     */
+    bool save();
+
 private:
 
     ros::NodeHandle node_handle_;

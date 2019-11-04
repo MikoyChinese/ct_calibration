@@ -51,7 +51,7 @@ class ApriltagVisualizer {
   }
   void SetAlpha(double alpha) { color_.a = alpha; }
 
-  void PublishApriltagsMarker(const aprilslam::Apriltags& apriltags);
+  void PublishApriltagsMarker(const ct_calibration::Apriltags& apriltags);
   void PublishApriltagsMarker(const std::vector<aprilslam::Apriltag>& tags,
                               const std::string& frame_id,
                               const ros::Time& stamp);
