@@ -36,11 +36,7 @@ int main(int argc, char **argv)
             tagslam::TagSlam apriltag_node(node_handle);
             if (apriltag_node.initialize())
             {
-                if (apriltag_node.runOnline())
-                {
-                    apriltag_node.subscribe();
-                    ros::spin();
-                }
+                apriltag_node.spin();
             }
             else
             {

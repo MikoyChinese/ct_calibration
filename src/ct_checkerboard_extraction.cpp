@@ -29,7 +29,6 @@ CTCheckerboardExtraction::Status CTCheckerboardExtraction::perform(boost::shared
   color_view->setObject(checkerboard_);
   color_view->setPoints(corners);
   color_view->setSensor(color_sensor_);
-  color_view->setId(ss.str());
 
   extracted_checkerboard = boost::make_shared<cb::Checkerboard>(*color_view);
 

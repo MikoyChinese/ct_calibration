@@ -62,8 +62,10 @@ catkin_package(
 )
 
 add_executable(ct_calibration
+  src/ct_calibration_multi.cpp
   src/ct_calibration.cpp              include/ct_calibration/ct_calibration.h
-  src/ct_calibration_node.cpp         include/ct_calibration/ct_calibration_node.h
+  src/ct_calibration_node0.cpp         include/ct_calibration/ct_calibration_node.h
+  src/ct_apriltag_node.cpp             include/ct_calibration/ct_apriltag_node.h
   src/ros_device.cpp                   include/ct_calibration/ros_device.h
   src/ct_checkerboard_extraction.cpp  include/ct_calibration/ct_checkerboard_extraction.h
 )

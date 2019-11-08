@@ -83,6 +83,8 @@ public:
      */
     bool save();
 
+    bool detectTags(cv::Mat gray_image, cb::PinholeSensor::Ptr & color_sensor, boost::shared_ptr<cb::PinholeView<cb::Checkerboard> > & color_view, boost::shared_ptr<cb::Checkerboard> & extracted_apriltag)
+
 private:
 
     ros::NodeHandle node_handle_;
@@ -116,6 +118,7 @@ private:
     zarray_t *detections_;
 
     void getTagParams(const ros::NodeHandle & node_handle);
+    bool analyzeData(const cb::PinholeView::Ptr & color_sensor, const cv::Mat & gray_image, CheckerboardView::Ptr & color_cb_view);
 } /* class CTApriltagNode */
 
 } /* namespace ct_calibration */

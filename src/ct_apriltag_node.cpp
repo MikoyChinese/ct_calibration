@@ -46,6 +46,7 @@ CTApriltagNode::CTApriltagNode(cont ros::NodeHandle & node_handle)
 {
     action_sub_ = node_handle_.subscribe("action", 1, &CTApriltagNode::actionCallback, this);
     status_pub_ = node_handle_.advertise<ct_calibration::CalibrationStatus>("status", 1);
+    marker_pub_ = node_handle_.advertise<visualization_msgs::Marker>("markers", 0);
     node_handle_.param("num_sensors", num_sensors_, 0);
 
     // AprilTag parameters.
@@ -58,6 +59,9 @@ CTApriltagNode::CTApriltagNode(cont ros::NodeHandle & node_handle)
     {
         ROS_FATAL("[Error]: AprilTag paramters are missing! Check tag_rows, tag_cols, tag_size, tag_space.");
     }
+
+    apriltag_ = boost::make_shared<Checkerboard>(tag_cols_, tag_rows_, tag_size_, tag_size_);
+    apriltag_->setFrameId("/apriltag");
 
     for (int i = 0; i < num_sensors_; ++i)
     {
@@ -240,9 +244,16 @@ void CTApriltagNode::spin()
                 {
                     device->convertLastMessages();
                     PinholeRGBDevice::Data::Ptr data = device->lastData();
+                    CTCalibration::CheckerboardView::Ptr cb_view;
                     cv::Mat image;
                     cv::cvtColor(data->image, image, cv::CV_BGR2GRAY);
-
+                    if (analyzeData(device->sensor(), data->image, cb_view))
+                    {
+                        calibration_.addData(device->sensor(), cb_view);
+                        images_acquired_map_[device->frameId]++;
+                        ROS_INFO_STREAM("[" << device->frameId() << "] apriltag detected");
+                        ++count;
+                    }
 
                 }
             }
@@ -257,14 +268,100 @@ void CTApriltagNode::spin()
             ROS_ERROR_STREAM("[Error]: Runtime exception: " << ex.what());
             return;
         }
+
+        status_msg_.header.stamp = ros::Time::now();
+        status_msg_.header.seq++;
+        for (size_t i = 0; i < status_msg_.sensor_ids.size(); ++i)
+        {
+            status_msg_.images_acquired[i] = images_acquired_map_[status_msg_.sensor_ids[i]];
+        }
+
+        status_pub_.publish(status_msg_);
+        calibration_->perform();
+        calibration_->publish();
+
+        if (count > 0)
+            ROS_INFO("-----------------------------------------------")
+        rate.sleep();
     }
+}
+
+bool CTApriltagNode::save()
+{
+  // Save tfs between sensors and world coordinate system (last checherboard) to file
+  std::string file_name = ros::package::getPath("ct_calibration") + "/config/camera_poses.yaml";
+  std::ofstream file;
+  file.open(file_name.c_str());
+
+  if (file.is_open())
+  {
+    ros::Time time = ros::Time::now();
+    file << "# Auto generated file." << std::endl;
+    file << "calibration_id: " << time.sec << std::endl << std::endl;
+
+    Pose new_world_pose = Pose::Identity();
+
+    // Write TF transforms between cameras and world frame
+    file << "# Poses w.r.t. the \"world\" reference frame" << std::endl;
+    file << "poses:" << std::endl;
+    for (size_t i = 0; i < sensor_vec_.size(); ++i)
+    {
+      const Sensor::Ptr & sensor = sensor_vec_[i];
+
+      Pose pose = new_world_pose * sensor->pose();
+
+      file << "  " << sensor->frameId().substr(1) << ":" << std::endl;
+
+      file << "    translation:" << std::endl
+           << "      x: " << pose.translation().x() << std::endl
+           << "      y: " << pose.translation().y() << std::endl
+           << "      z: " << pose.translation().z() << std::endl;
+
+      Quaternion rotation(pose.rotation());
+      file << "    rotation:" << std::endl
+           << "      x: " << rotation.x() << std::endl
+           << "      y: " << rotation.y() << std::endl
+           << "      z: " << rotation.z() << std::endl
+           << "      w: " << rotation.w() << std::endl;
+
+    }
+
+    file << std::endl << "# Inverse poses" << std::endl;
+    file << "inverse_poses:" << std::endl;
+    for (size_t i = 0; i < sensor_vec_.size(); ++i)
+    {
+      const Sensor::Ptr & sensor = sensor_vec_[i];
+
+      Pose pose = new_world_pose * sensor->pose();
+      pose = pose.inverse();
+
+      file << "  " << sensor->frameId().substr(1) << ":" << std::endl;
+
+      file << "    translation:" << std::endl
+           << "      x: " << pose.translation().x() << std::endl
+           << "      y: " << pose.translation().y() << std::endl
+           << "      z: " << pose.translation().z() << std::endl;
+
+      Quaternion rotation(pose.rotation());
+      file << "    rotation:" << std::endl
+           << "      x: " << rotation.x() << std::endl
+           << "      y: " << rotation.y() << std::endl
+           << "      z: " << rotation.z() << std::endl
+           << "      w: " << rotation.w() << std::endl;
+
+    }
+  }
+  file.close();
+
+  ROS_INFO_STREAM(file_name << " created!");
+
+  return true;
+
 }
 
 
 void CTApriltagNode::getTagParams(cont ros::NodeHandle & node_handle)
 {
-    // status_flag
-    bool is_ok = true;
     // Get all parameters of AprilTag.
     tag_family_ = getAprilTagOption<std::string>(node_handle_, "tag_family", "tag36h11");
     tag_threads_ = getAprilTagOption<int>(node_handle_, "tag_threads", 4);
@@ -274,7 +371,36 @@ void CTApriltagNode::getTagParams(cont ros::NodeHandle & node_handle)
     tag_debug_ = getAprilTagOption<int>(node_handle_, "tag_debug", 0);
 }
 
-AprilTagDetectionArray CTApriltagNode::detectTags(const cv::Mat image)
+bool CTApriltagNode::analyzeData(const cb::PinholeView::Ptr & color_sensor,
+                                 const cv::Mat & gray_image,
+                                 CheckerboardView::Ptr & color_cb_view)
+{
+    cb::PinholeView<cb::Checkboard>::Ptr color_view;
+    cb::Checkerboard::Ptr extracted_apriltag;
+    if (detectTags(gray_image, color_sensor, color_view, extracted_apriltag))
+    {
+        visualization_msgs::Marker apriltag_marker;
+        apriltag_marker.ns = "apriltag";
+        apriltag_marker.id = node_map_[color_sensor]->id();
+        extracted_apriltag->toMarker(apriltag_marker);
+        marker_pub_.publish(apriltag_marker);
+
+        geometry_msgs::TransformStamped transform_msg;
+        extracted_apriltag->toTF(transform_msg);
+        tf_pub_.sendTransform(transform_msg);
+
+        color_cb_view = boost::make_shared<CheckerboardView>(color_view, extracted_apriltag, extracted_apriltag->center(), false);
+
+        return true;
+
+    }
+    return false;
+}
+
+bool CTApriltagNode::detectTags(cv::Mat gray_image,
+                                cb::PinholeSensor::Ptr & color_sensor,
+                                boost::shared_ptr<cb::PinholeView<cb::Checkerboard> > & color_view,
+                                boost::shared_ptr<cb::Checkerboard> & extracted_apriltag) const
 {
     if (detections_)
     {
@@ -282,76 +408,31 @@ AprilTagDetectionArray CTApriltagNode::detectTags(const cv::Mat image)
         detections_ = NULL;
     }
 
-    image_u8_t apriltag_image = { .width = image.cols,
-                                  .height = image.rows,
-                                  .stride = image.cols,
-                                  .buf = image.data};
+    image_u8_t apriltag_image = { .width = gray_image.cols,
+                                  .height = gray_image.rows,
+                                  .stride = gray_image.cols,
+                                  .buf = gray_image.data};
     detections_ = apriltag_detector_detect(td_, &apriltag_image);
-    // Compute the estimated translation and rotation individually for each
-    // detected tag
-    AprilTagDetectionArray tag_detection_array;
-    std::vector<std::string > detection_names;
-    tag_detection_array.header = device->lastMessages().image_msg->header;
-    std::map<std::string, std::vector<cv::Point3d > > bundleObjectPoints;
-    std::map<std::string, std::vector<cv::Point2d > > bundleImagePoints;
 
-    for (int i=0; i < zarray_size(detections_); i++)
+    // Only use first detection;s corners.
+    if (detections_.size() > 0)
     {
-        apriltag_detection_t *detection;
-        zarray_get(detections_, i, &detection);
-        int tagID = detection->id;
-        bool is_part_of_bundle = false;
-        for (unsigned int j=0; j<tag_bundle_descriptions_.size(); j++)
-        {
-          // Iterate over the registered bundles
-          TagBundleDescription bundle = tag_bundle_descriptions_[j];
+        std::vector<cv::Point2f> corners;
+        corners = detections_[0]->p;
 
-          if (bundle.id2idx_.find(tagID) != bundle.id2idx_.end())
-          {
-            // This detected tag belongs to the j-th tag bundle (its ID was found in
-            // the bundle description)
-            is_part_of_bundle = true;
-            std::string bundleName = bundle.name();
+        std::stringstream ss;
+        ss << "view_" << color_sensor_->frameId().substr(1);
 
-            //===== Corner points in the world frame coordinates
-            double s = bundle.memberSize(tagID)/2;
-            addObjectPoints(s, bundle.memberT_oi(tagID),
-                            bundleObjectPoints[bundleName]);
+        color_view = boost::make_shared<cb::PinholeView<cb::Checkerboard> >();
+        color_view->setId(ss.str());
+        color_view->setObject(apriltag_);
+        color_view->setPoints(corners);
+        color_view->setSensor(color_sensor);
 
-            //===== Corner points in the image frame coordinates
-            addImagePoints(detection, bundleImagePoints[bundleName]);
-          }
-        }
-
-        StandaloneTagDescription* standaloneDescription;
-        if (!findStandaloneTagDescription(tagID, standaloneDescription, !is_part_of_bundle)
-            continue;
-
-        double tag_size = standaloneDescription->size();
-        // Get estimated tag pose in the camera frame.
-        //
-        // Note on frames:
-        // The raw AprilTag 2 uses the following frames:
-        //   - camera frame: looking from behind the camera (like a
-        //     photographer), x is right, y is up and z is towards you
-        //     (i.e. the back of camera)
-        //   - tag frame: looking straight at the tag (oriented correctly),
-        //     x is right, y is down and z is away from you (into the tag).
-        // But we want:
-        //   - camera frame: looking from behind the camera (like a
-        //     photographer), x is right, y is down and z is straight
-        //     ahead
-        //   - tag frame: looking straight at the tag (oriented correctly),
-        //     x is right, y is up and z is towards you (out of the tag).
-        // Using these frames together with cv::solvePnP directly avoids
-        // AprilTag 2's frames altogether.
-        // TODO solvePnP[Ransac] better?
-
-        std::vector<cv::Point3d > standaloneTagObjectPoints;
-        std::vector<cv::Point2d > standaloneTagImagePoints;
-        addObjectPoints(tag_size/2, cv::Matx44d::eye(), standaloneTagObjectPoints);
-        addImagePoints(detection, standaloneTagImagePoints);
+        extracted_apriltag = boost::make_shared<cb::Checkboard>(*color_view);
+        return true;
     }
+    return false;
 }
 
 }
